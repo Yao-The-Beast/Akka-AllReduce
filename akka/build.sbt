@@ -5,7 +5,6 @@ val akkaVersion = "2.5.4"
 
 lazy val `akka-sample-cluster-scala` = project
   .in(file("."))
-  .settings(multiJvmSettings: _*)
   .settings(
     organization := "com.typesafe.akka.samples",
     scalaVersion := "2.12.2",
