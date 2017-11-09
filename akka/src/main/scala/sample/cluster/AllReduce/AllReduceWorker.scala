@@ -24,6 +24,8 @@ class AllReduceWorker extends Actor {
   val group: collection.mutable.Map[Integer, ActorRef] = collection.mutable.Map[Integer, ActorRef]()
   var data: Array[Double] = Array.empty
 
+  var iteration_id = 0;
+
 
   def receive = {
 
@@ -51,11 +53,12 @@ class AllReduceWorker extends Actor {
 
 
     case start: StartScatter =>
+      iteration_id = start.iteration_id;
       segment_count = 0;
       for ((index, worker) <- group) {
         val (data_begin, data_end) = getRange(index)
         val sliced: Array[Double] = data.slice(data_begin, data_end)
-        worker ! Scatter(sliced, index)
+        worker ! Scatter(sliced, index, start.iteration_id)
       }
 
     case scatter: Scatter =>
@@ -67,7 +70,7 @@ class AllReduceWorker extends Actor {
         scatter_buff = Array.empty;
         //broadcast
         for (index:Int <- 0 until group_size){
-          group(index) ! Gather(reduced_result, idx)
+          group(index) ! Gather(reduced_result, idx, scatter.iteration_id)
         }
       }
 
@@ -81,7 +84,7 @@ class AllReduceWorker extends Actor {
         data = output_buff.clone()
         println(s"------------ Reduce Done--------------");
         printData();
-        master(0) ! AllReduceDone()
+        master(0) ! AllReduceDone(iteration_id)
       }
 
     case _ => // ignore
@@ -124,6 +127,7 @@ class AllReduceWorker extends Actor {
     for (i:Int <- 0 until data.length){
       println(s"${data(i)}");
     }
+    println(s"Iteration id: ${iteration_id}");
   }
 }
 

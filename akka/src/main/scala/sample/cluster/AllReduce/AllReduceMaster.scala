@@ -17,6 +17,9 @@ class AllReduceMaster(num_workers:Int) extends Actor {
 
   var allReduceDone = 0;
 
+  //current iteration id, starts from 0
+  var iteration_id = 0;
+
   var workers: collection.mutable.Map[Integer, ActorRef] = collection.mutable.Map[Integer, ActorRef]()
 
   val cluster = Cluster(context.system)
@@ -43,23 +46,28 @@ class AllReduceMaster(num_workers:Int) extends Actor {
     case worker_ready: WorkerReady =>
       num_ready_workers += 1;
       if (num_ready_workers == num_workers){
-        self ! StartAllReduce()
+        self ! StartAllReduce(iteration_id);
       }
 
     case start : StartAllReduce =>
       for ((idx, worker) <- workers){
-       worker ! StartScatter()
+        worker ! StartScatter(start.iteration_id)
       }
 
-    case end: AllReduceDone =>
-      
-      allReduceDone += 1;
-      if (allReduceDone == num_workers){
-        println(s"Next Round");
-        allReduceDone = 0;
-        self ! StartAllReduce();
+    case iterationFinish: AllReduceDone =>
+      //if the iterationFinish msg sent from one actor has the same iteration id
+      //we increase the counter
+      if (iterationFinish.iteration_id == iteration_id){
+        allReduceDone += 1;
+        if (allReduceDone == num_workers){
+          println(s"Next Round");
+          iteration_id += 1;
+          allReduceDone = 0;
+          self ! StartAllReduce(iteration_id);
+        }
+      }else{
+        println(s"Stale Iteration Finish from ${sender.toString()}");
       }
-
   }
 
 //------------------Helper Functions------------------//
