@@ -15,6 +15,8 @@ import scala.language.postfixOps
 
 class AllReduceMaster(num_workers:Int) extends Actor {
 
+  var allReduceDone = 0;
+
   var workers: collection.mutable.Map[Integer, ActorRef] = collection.mutable.Map[Integer, ActorRef]()
 
   val cluster = Cluster(context.system)
@@ -50,7 +52,13 @@ class AllReduceMaster(num_workers:Int) extends Actor {
       }
 
     case end: AllReduceDone =>
-      println(s"-------------All Reduce Done--------------")
+      
+      allReduceDone += 1;
+      if (allReduceDone == num_workers){
+        println(s"Next Round");
+        allReduceDone = 0;
+        self ! StartAllReduce();
+      }
 
   }
 

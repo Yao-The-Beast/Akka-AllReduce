@@ -79,7 +79,7 @@ class AllReduceWorker extends Actor {
       segment_count += 1
       if(segment_count == group_size){
         data = output_buff.clone()
-        println(s"-------------All Reduce Done--------------");
+        println(s"------------ Reduce Done--------------");
         printData();
         master(0) ! AllReduceDone()
       }
@@ -107,6 +107,7 @@ class AllReduceWorker extends Actor {
       }else{
         for (j <- 0 until scala.math.min(reduced_buff.length, scatter_buff(i).length)){
           reduced_buff(j) += scatter_buff(i)(j);
+          reduced_buff(j) = scala.math.min(reduced_buff(j),1000);
         }
       }
     }
