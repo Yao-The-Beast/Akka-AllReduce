@@ -22,9 +22,17 @@ class AllReduceWorker extends Actor {
   var master:Array[ActorRef] = Array.empty;
 
   val group: collection.mutable.Map[Integer, ActorRef] = collection.mutable.Map[Integer, ActorRef]()
-  var data: Array[Double] = Array.empty
+  //var data_buff: Array[Double] = Array.empty;
+  var data_buff = new DataBuffer();
+
+
 
   var iteration_id = 0;
+
+  //about multibuffer stuff
+  var scatter_buff_threshold = 1;
+  var gather_buff_threshold = 1;
+  var maximum_gap = 2;
 
 
   def receive = {
@@ -38,14 +46,17 @@ class AllReduceWorker extends Actor {
         }
       }
 
-      data = initialize_package.initialized_data;
-      data_size = data.length;
+      //initialize data_buff
+      data_buff.init(maximum_gap);
+
+      data_buff.insert_data(initialize_package.initialized_data, iteration_id);
+      data_size = initialize_package.initialized_data.length;
       group_size = group.size;
       segment_size = data_size / group_size;
       output_buff = Array.fill[Double](data_size)(0.0);
 
-      println(s"Peers and Data initialized");
-      
+      println(s"Peers and data_buff initialized");
+
       master :+= sender;
       //let master know I am ready
       sender ! WorkerReady();
@@ -57,7 +68,7 @@ class AllReduceWorker extends Actor {
       segment_count = 0;
       for ((index, worker) <- group) {
         val (data_begin, data_end) = getRange(index)
-        val sliced: Array[Double] = data.slice(data_begin, data_end)
+        val sliced: Array[Double] = data_buff.get_data(start.iteration_id).slice(data_begin, data_end)
         worker ! Scatter(sliced, index, start.iteration_id)
       }
 
@@ -81,9 +92,9 @@ class AllReduceWorker extends Actor {
       }
       segment_count += 1
       if(segment_count == group_size){
-        data = output_buff.clone()
+        data_buff.insert_data(output_buff, gather.iteration_id)
         println(s"------------ Reduce Done--------------");
-        printData();
+        data_buff.printInfo();
         master(0) ! AllReduceDone(iteration_id)
       }
 
@@ -99,7 +110,7 @@ class AllReduceWorker extends Actor {
     (segment_size * data_id, scala.math.min(segment_size * (data_id + 1), data_size))
   }
 
-  //reduce data
+  //reduce scatter_buff
   def reduceData() = {
     assert (scatter_buff.length == group_size);
     //right now we just add them up
@@ -115,22 +126,8 @@ class AllReduceWorker extends Actor {
       }
     }
     (reduced_buff)
-
-  }
-
-  def printInfo() = {
-    println(s"Worker Index: ${idx}");
-    println(s"Data: ${data}");
-  }
-
-  def printData() = {
-    for (i:Int <- 0 until data.length){
-      println(s"${data(i)}");
-    }
-    println(s"Iteration id: ${iteration_id}");
   }
 }
-
 
 object AllReduceWorker {
   def main(args: Array[String]): Unit = {

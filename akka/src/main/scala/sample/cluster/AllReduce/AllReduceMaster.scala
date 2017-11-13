@@ -11,6 +11,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import java.time._
 
 
 class AllReduceMaster(num_workers:Int) extends Actor {
@@ -60,7 +61,10 @@ class AllReduceMaster(num_workers:Int) extends Actor {
       if (iterationFinish.iteration_id == iteration_id){
         allReduceDone += 1;
         if (allReduceDone == num_workers){
+          //debug use
+          Thread.sleep(500);
           println(s"Next Round");
+          
           iteration_id += 1;
           allReduceDone = 0;
           self ! StartAllReduce(iteration_id);
