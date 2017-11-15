@@ -42,14 +42,25 @@ class DataBuffer {
 		(isSuccessful);
 	}
 
+
+	//---------helper functions ----------//
+
 	def get_index(id:Int) = {
 		(id - ids.head);
+	}
+
+	//check if it is a valid index, within the buffer range
+	def is_valid_index(id:Int) = {
+		if (ids.isEmpty)
+			(false)
+		else
+			(id >= 0 && id < gap)
 	}
 
 	def get_data(id: Int) = {
 		var index = get_index(scala.math.max(0, id-1));
 		var result:Array[Double] = Array.empty;
-		if (index >=0){
+		if (is_valid_index(index)){
 			result = data_buff(index);
 		}
 		(result);

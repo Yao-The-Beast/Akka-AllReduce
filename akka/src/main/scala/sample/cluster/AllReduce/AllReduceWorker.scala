@@ -12,7 +12,7 @@ import scala.language.postfixOps
 
 class AllReduceWorker extends Actor {
  
-  var scatter_buff: Array[Array[Double]] = Array.empty
+  
   var output_buff : Array[Double] = Array.empty
   var segment_count = 0
   var data_size = 0;
@@ -22,15 +22,14 @@ class AllReduceWorker extends Actor {
   var master:Array[ActorRef] = Array.empty;
 
   val group: collection.mutable.Map[Integer, ActorRef] = collection.mutable.Map[Integer, ActorRef]()
-  //var data_buff: Array[Double] = Array.empty;
   var data_buff = new DataBuffer();
-
+  var scatter_buff = new ScatterBuffer();
 
 
   var iteration_id = 0;
 
   //about multibuffer stuff
-  var scatter_buff_threshold = 1;
+  var scatter_buff_threshold = 0.5;
   var gather_buff_threshold = 1;
   var maximum_gap = 2;
 
@@ -46,8 +45,9 @@ class AllReduceWorker extends Actor {
         }
       }
 
-      //initialize data_buff
+      //initialize data_buff, scatter_buff
       data_buff.init(maximum_gap);
+      scatter_buff.init(maximum_gap, scatter_buff_threshold, group.size);
 
       data_buff.insert_data(initialize_package.initialized_data, iteration_id);
       data_size = initialize_package.initialized_data.length;
@@ -65,7 +65,6 @@ class AllReduceWorker extends Actor {
 
     case start: StartScatter =>
       iteration_id = start.iteration_id;
-      segment_count = 0;
       for ((index, worker) <- group) {
         val (data_begin, data_end) = getRange(index)
         val sliced: Array[Double] = data_buff.get_data(start.iteration_id).slice(data_begin, data_end)
@@ -74,11 +73,14 @@ class AllReduceWorker extends Actor {
 
     case scatter: Scatter =>
       assert(scatter.data_id == idx)
-      scatter_buff :+= scatter.data
-      if(scatter_buff.length == group_size){
+      scatter_buff.insert_data(scatter.data, scatter.iteration_id);
+      //debug
+      //println(s"From ${sender.toString()}     Value ${scatter.data.mkString(",")}")
+
+      //if we can reduce data, enough messages have been gathered
+      if(scatter_buff.can_reduce_data(scatter.iteration_id)){
         //reduce the scatter_buff
-        val reduced_result = reduceData();
-        scatter_buff = Array.empty;
+        val reduced_result = scatter_buff.reduce_data(scatter.iteration_id);
         //broadcast
         for (index:Int <- 0 until group_size){
           group(index) ! Gather(reduced_result, idx, scatter.iteration_id)
@@ -87,15 +89,18 @@ class AllReduceWorker extends Actor {
 
     case gather: Gather =>
       val (data_begin, data_end) = getRange(gather.data_id)
+      //println(s"Gather From ${sender.toString()}")
       for (i:Int <- data_begin until data_end) {
         output_buff(i) = gather.data(i-data_begin)
       }
       segment_count += 1
       if(segment_count == group_size){
+        segment_count = 0;
         data_buff.insert_data(output_buff, gather.iteration_id)
         println(s"------------ Reduce Done--------------");
         data_buff.printInfo();
-        master(0) ! AllReduceDone(iteration_id)
+        output_buff = Array.fill[Double](data_size)(0.0);
+        master(0) ! AllReduceDone(gather.iteration_id)
       }
 
     case _ => // ignore
@@ -110,23 +115,6 @@ class AllReduceWorker extends Actor {
     (segment_size * data_id, scala.math.min(segment_size * (data_id + 1), data_size))
   }
 
-  //reduce scatter_buff
-  def reduceData() = {
-    assert (scatter_buff.length == group_size);
-    //right now we just add them up
-    var reduced_buff:Array[Double] = Array.empty;
-    for (i <- 0 until scatter_buff.length){
-      if (reduced_buff.isEmpty){
-        reduced_buff = scatter_buff(i);
-      }else{
-        for (j <- 0 until scala.math.min(reduced_buff.length, scatter_buff(i).length)){
-          reduced_buff(j) += scatter_buff(i)(j);
-          reduced_buff(j) = scala.math.min(reduced_buff(j),1000);
-        }
-      }
-    }
-    (reduced_buff)
-  }
 }
 
 object AllReduceWorker {

@@ -63,9 +63,8 @@ class AllReduceMaster(num_workers:Int) extends Actor {
         if (allReduceDone == num_workers){
           //debug use
           Thread.sleep(500);
-          println(s"Next Round");
-          
           iteration_id += 1;
+          println(s"Next Round ${iteration_id}");
           allReduceDone = 0;
           self ! StartAllReduce(iteration_id);
         }
@@ -80,7 +79,7 @@ class AllReduceMaster(num_workers:Int) extends Actor {
 
     var data:Array[Array[Double]] = Array.empty;
     for (i <- 0 until num_workers){
-      data :+= Array(i.toDouble,i.toDouble,i.toDouble,i.toDouble);
+      data :+= Array(i.toDouble,i.toDouble,i.toDouble,i.toDouble, i.toDouble, i.toDouble);
     }
     for((idx, worker) <- workers){
       worker ! InitializeWorker(workers, data(idx));
@@ -105,10 +104,10 @@ class AllReduceMaster(num_workers:Int) extends Actor {
 
 
 object AllReduceMaster {
-  def main(args: Array[String]= Array("2551", "2")): Unit = {
+  def main(args: Array[String]= Array("2551", "3")): Unit = {
     
     val port = if (args.isEmpty) "2551" else args(0)
-    val num_workers = if (args.length < 2) 2 else args(1).toInt
+    val num_workers = if (args.length < 2) 3 else args(1).toInt
 
     val config = ConfigFactory.parseString(s"akka.remote.netty.tcp.port=$port").
       withFallback(ConfigFactory.parseString("akka.cluster.roles = [master]")).
